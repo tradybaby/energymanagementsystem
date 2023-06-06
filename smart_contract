@@ -1,0 +1,130 @@
+pragma solidity ^0.5.16;
+
+contract Energy_transaction{
+    address payable member;
+    mapping (address => uint) public balance;
+    address creator;
+
+    uint public no_of_storages;
+    uint price;
+    uint [] public seller_list;
+
+    struct Storage {
+        uint storageid;
+        string storageowner;
+        string houseaddress;
+        uint storageamount;
+        uint price_per_unit;
+        uint demand;
+        address payable producer;
+    }
+
+    mapping (uint => Storage) public Energy_Storage;
+    mapping (address => uint) public Storage_Number;
+
+    constructor() public {
+        creator = msg.sender;
+    }
+
+
+
+    event EnergyDemand(address _from, uint _demand);
+
+    event EnergyTransferrred(address _seller, address _buyer, uint _amount);
+
+
+
+
+
+
+    function AddCredit() external payable {
+        balance[msg.sender] = balance[msg.sender] + msg.value;
+    }
+
+    function CreateStorage() external {
+        no_of_storages ++;
+        Energy_Storage[no_of_storages] = Storage(no_of_storages, "name", "address", 0, 0, 0, msg.sender );
+        Storage_Number[msg.sender] = no_of_storages;
+    }
+
+
+
+
+    function SellEnergy (uint EnergyAmount) external {
+        require(Storage_Number[msg.sender] > 0, "There is no Storage connected to this wallet");
+        Energy_Storage[Storage_Number[msg.sender]].storageamount += EnergyAmount;
+        seller_list.push(Storage_Number[msg.sender]);
+    }
+
+uint seller;
+
+
+    function DeleteSeller(uint index) internal{
+    for(uint i = index; i < seller_list.length-1; i++){
+      seller_list[i] = seller_list[i+1];      
+    }
+    seller_list.pop();
+  }
+uint counter;
+uint transaction_size;
+
+    function BuyEnergy (uint EnergyAmount) external {
+        require(balance[msg.sender] >= EnergyAmount * price, "Not enough credit on your account");
+        for (uint i = 0; i < seller_list.length; i++){
+            seller = seller_list[i];
+            if (Energy_Storage[seller].producer == msg.sender){
+                continue;
+            }
+            if (Energy_Storage[seller].storageamount > EnergyAmount) {
+                Energy_Storage[seller].storageamount = Energy_Storage[seller].storageamount - EnergyAmount;
+                emit EnergyTransferrred(Energy_Storage[seller].producer, msg.sender, EnergyAmount);
+                balance[msg.sender] = balance[msg.sender] - EnergyAmount * price;
+                balance[Energy_Storage[seller].producer] = balance[Energy_Storage[seller].producer] + EnergyAmount * price;
+                break;
+            }
+            if (Energy_Storage[seller].storageamount == EnergyAmount) {
+                Energy_Storage[seller].storageamount = 0;
+                DeleteSeller(seller-1);
+                emit EnergyTransferrred(Energy_Storage[seller].producer, msg.sender, EnergyAmount);
+                break;
+            }
+            if (Energy_Storage[seller].storageamount < EnergyAmount){
+                transaction_size = Energy_Storage[seller].storageamount;
+                EnergyAmount = EnergyAmount - Energy_Storage[seller].storageamount;
+                Energy_Storage[seller].storageamount = 0;
+                counter += 1;
+                emit EnergyTransferrred(Energy_Storage[seller].producer, msg.sender, transaction_size);
+            }
+
+        }
+        for (uint i = 0; i < counter; i++) {
+            DeleteSeller(i);
+        }
+        counter = 0;
+        if (EnergyAmount > 0) {
+            emit EnergyDemand(msg.sender, EnergyAmount);
+        }
+    }
+
+
+    function WithdrawCredit(uint Amount) external {
+        require(balance[msg.sender] > 0, "There is no balance connected to this wallet or there is no creit on the account");
+        if (balance[msg.sender] >= Amount ) {
+          msg.sender.transfer(Amount);
+          balance[msg.sender] = balance[msg.sender] - Amount;
+        }
+        else {
+            revert("Invalid Amount");
+        }
+    }
+    
+
+    function SetPrice(uint PricePerUnit) external {
+        require(msg.sender == creator, "Only the smart contract provider can access this function");
+        price = PricePerUnit;
+    }
+
+
+
+ 
+}
